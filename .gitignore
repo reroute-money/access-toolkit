@@ -1,0 +1,18 @@
+# Node
+node_modules/
+.pnpm-store/
+
+# 构建产物
+dist/
+storybook-static/
+doc_build/
+
+# 本地
+.DS_Store
+*.local
+*.log*
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea
