@@ -134,13 +134,17 @@ func (client *Client) MakeCollectionOrder(ctx context.Context, order CollectionO
 	return Call[CollectionOrderResult](ctx, client, http.MethodPut, "/v2/collection-order", order)
 }
 
-// QueryPaymentOrder 查询代付单 | identifier 为平台单号（内部 uuid）或外部单号
+// QueryPaymentOrder 查询代付单 | identifier 为付款单号（响应顶层的 uniqueIdentifier, 即
+// payment_orders 行自己的 uuid）或商户外部单号（order.externalIdentifier）;
+// 订单层的 order.uniqueIdentifier 不参与匹配, 拿它查必然查空
 func (client *Client) QueryPaymentOrder(ctx context.Context, identifier string) (*Response[PaymentOrderResult], error) {
 	// 单号拼进路径 | 服务端验签取 request.baseUrl, 它是含单号的完整路径, 所以规范串也必须带上
 	return Call[PaymentOrderResult](ctx, client, http.MethodGet, "/v2/payment-order/"+identifier, nil)
 }
 
-// QueryCollectionOrder 查询代收单 | identifier 为平台单号（内部 uuid）或外部单号
+// QueryCollectionOrder 查询代收单 | identifier 为收款单号（响应顶层的 uniqueIdentifier, 即
+// collection_orders 行自己的 uuid）或商户外部单号（order.externalIdentifier）;
+// 订单层的 order.uniqueIdentifier 不参与匹配
 func (client *Client) QueryCollectionOrder(ctx context.Context, identifier string) (*Response[CollectionOrderResult], error) {
 	return Call[CollectionOrderResult](ctx, client, http.MethodGet, "/v2/collection-order/"+identifier, nil)
 }

@@ -67,25 +67,28 @@ func main() {
 		log.Fatal(err)
 	}
 	// -
-	fmt.Println(response.Data.Order.UniqueIdentifier, response.Data.Order.Status)
+	fmt.Println(response.Data.UniqueIdentifier, response.Data.Order.Status)
 }
 ```
 
 - 代收下单：`client.MakeCollectionOrder(ctx, access.CollectionOrder{Order: ...})`，无收款信息。
-- 查询：`client.QueryPaymentOrder(ctx, identifier)` / `client.QueryCollectionOrder(ctx, identifier)`，`identifier` 为平台单号（内部 uuid）或外部单号，命中别人的单返回业务错。
+- 查询：`client.QueryPaymentOrder(ctx, identifier)` / `client.QueryCollectionOrder(ctx, identifier)`，`identifier` 为**单据号**（下单响应顶层的 `uniqueIdentifier`，即 `collection_orders` / `payment_orders` 行自己的 uuid）或商户外部单号（`order.externalIdentifier`），命中别人的单返回业务错；订单层的 `order.uniqueIdentifier` 不参与匹配，拿它查必然查空。
 - 账户：`client.QueryAccounts(ctx)` 列签名 `actAs` 成员名下的余额户与保证金户，无入参。
 - 幂等：同一 `tenantMember` + `externalIdentifier` 重复下单复用库内单据；金额/收款信息/`returnURL` 不一致时报业务错（换了回跳地址就是另一笔导流口径，静默复用旧单会把付款人导回第一次登记的那个页面）。
 - `/v2/*` 之外的端点用 `access.Call[T](ctx, client, method, path, payload)`（对应 TS 的 `client.call<T>()`）。
-- 三个单号别混：`order.externalIdentifier` 是**商户自己的单号**（下单带进来，成员级唯一），`order.uniqueIdentifier` 是**平台单号**（下发给渠道当 `externalId` 用的就是它），`order.internalIdentifier` 是**渠道单号**（渠道给出的订单编号，平台拿到渠道结论才落得上，下单被渠道明确拒绝时为空；落定后不会再变，可用它去渠道侧核对这笔交易）。
+- 四个单号别混：**单据号** `uniqueIdentifier`（响应顶层，代收是收款单号、代付是付款单号，查单接口认它，商户要存的、回调推送顶层带的都是它），`order.externalIdentifier` 是**商户自己的单号**（下单带进来，成员级唯一），`order.uniqueIdentifier` 是**订单号**（另一张表的号，平台下发给渠道当 `externalId` 用的就是它，查单接口不认它，所以不要拿它去查单），`order.internalIdentifier` 是**渠道单号**（渠道给出的订单编号，平台拿到渠道结论才落得上，下单被渠道明确拒绝时为空；落定后不会再变，可用它去渠道侧核对这笔交易）。
 - 两个地址也别混：`redirectURL` 是**去**渠道收银台的跳转地址（渠道给的，商户据此把付款人导过去；渠道没给则一直为空）；`returnURL` 是**回**商户的跳转地址（商户下单时登记，平台原样下发渠道，付款人付完后由渠道导回这里）。平台都不校验 `returnURL` 归属哪个域名，也不把它拼到 `redirectURL` 上。
 
 ## 订单推送验签（我方→商户）
 
-单据进终态（`SUCCEEDED` / `FAILED`）时平台按 `order.callbackURL` 推一份 Order 报文给商户，商户**必须先验签再落库**——回调路由对全网开放，谁都能构造一个 `status: SUCCEEDED` 的 POST。
+单据进终态（`SUCCEEDED` / `FAILED`）时平台按 `order.callbackURL` 推一份**业务单据**给商户（代收推收款单、代付推付款单，订单信息包在 `order` 里，与查单响应同构），商户**必须先验签再落库**——回调路由对全网开放，谁都能构造一个 `status: SUCCEEDED` 的 POST。
 
 ```go
-notify, err := access.ParseMerchantNotify(rawBody)  // 报文是 Order 实体本身，不带 {code,data} 信封
+notify, err := access.ParseMerchantNotify(rawBody)  // 报文是业务单据，订单包在 order 里，不带 {code,data} 信封
 if err != nil { /* ErrNotifyBodyInvalid */ }
+// 商户定位自己那笔交易用 notify.Order.ExternalIdentifier，状态用 notify.Order.Status
+// 顶层 notify.UniqueIdentifier 是单据号，可以直接拿去 QueryCollectionOrder / QueryPaymentOrder 回查
+```
 
 err = access.VerifyMerchantNotify(platformPublicKeyPEM, access.NotifyVerification{
 	// 关键：取下单时登记的 callbackURL 的 pathname，不是请求到达自己服务时的 URL.Path
@@ -99,7 +102,7 @@ err = access.VerifyMerchantNotify(platformPublicKeyPEM, access.NotifyVerificatio
 - 规范串与出站请求签名同源（同一个 `signatureContent`），只是 `Act-As` 当前固定为 `-`、签名密钥换成平台的 `platformPrivateKey`；商户验签用的公钥就是下单鉴权时拿到的那把 `platformPublicKey`，无需新增密钥。
 - 时间戳窗口默认 5 分钟（`DefaultNotifyMaxSkew`，与平台校验入站签名的窗口一致），可用 `NotifyVerification.MaxSkew` 调整；`Now` 留零值按当前时间判。
 - 失败原因用 `errors.Is` 区分：`ErrSignatureInvalid`（伪造/报文被改/公钥配错）、`ErrSignatureExpired`、`ErrAuthorizationInvalid`、`ErrPublicKeyInvalid`、`ErrNotifyBodyInvalid`。
-- 推送至少一次投递，重投次数用尽即放弃，商户要按单号 + 状态幂等去重，并留主动查单（`QueryCollectionOrder` / `QueryPaymentOrder`）作掉单兜底。
+- 推送至少一次投递，重投次数用尽即放弃，商户要按 `notify.Order.ExternalIdentifier`（商户自己的单号）+ `notify.Order.Status` 幂等去重，并留主动查单（`QueryCollectionOrder` / `QueryPaymentOrder`，传推送顶层的单据号或商户自己的外部单号，不要传 `notify.Order.UniqueIdentifier`）作掉单兜底。
 
 ## 鉴权：接口签名方法
 

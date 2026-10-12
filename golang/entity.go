@@ -155,7 +155,8 @@ const (
 // OrderResult 服务端回填后的单据 | 只声明商户侧要消费的字段,
 // 其余响应字段（渠道、费率、商户/代理关系等）解析时直接忽略
 type OrderResult struct {
-	// UniqueIdentifier 平台单号
+	// UniqueIdentifier 订单号 | orders 行自己的 uuid, 下发给渠道当 externalId、订单推送带的也是它;
+	// 查单接口不认它, 商户要存的是单据层的 CollectionOrderResult.UniqueIdentifier / PaymentOrderResult.UniqueIdentifier
 	UniqueIdentifier string `json:"uniqueIdentifier"`
 	// ExternalIdentifier 外部单号
 	ExternalIdentifier string `json:"externalIdentifier"`
@@ -184,7 +185,7 @@ type OrderResult struct {
 
 // PaymentOrderResult 代付下单结果
 type PaymentOrderResult struct {
-	// UniqueIdentifier 付款单号
+	// UniqueIdentifier 付款单号 | payment_orders 行自己的 uuid, 查单接口认它（或 order.externalIdentifier）
 	UniqueIdentifier string `json:"uniqueIdentifier"`
 	// Order 订单信息
 	Order OrderResult `json:"order"`
@@ -196,7 +197,7 @@ type PaymentOrderResult struct {
 
 // CollectionOrderResult 代收下单结果
 type CollectionOrderResult struct {
-	// UniqueIdentifier 收款单号
+	// UniqueIdentifier 收款单号 | collection_orders 行自己的 uuid, 查单接口认它（或 order.externalIdentifier）
 	UniqueIdentifier string `json:"uniqueIdentifier"`
 	// Order 订单信息
 	Order OrderResult `json:"order"`
@@ -240,36 +241,28 @@ type Account struct {
 	FrozenBalance int64 `json:"frozenBalance"`
 }
 
-// MerchantNotify 平台订单推送报文 | 我方→商户方向, 与 OrderCallbackService.pushMerchantNotify 序列化的
-// Order 实体对齐：代收/代付共用一套报文, 由 Type 区分单据种类。
+// MerchantNotify 平台订单推送报文 | 我方→商户方向, 与 OrderCallbackService.buildMerchantNotifyBody
+// 序列化出的业务单据对齐：代收推收款单、代付推付款单, 订单信息包在 Order 里,
+// 形状与 `/v2/collection-order`、`/v2/payment-order` 的查单响应同构。
 //
-// 只声明商户要消费的字段, 其余（tenantMember、汇率、账户等）解析时忽略; 平台侧已剔除 fees / feeGroups,
+// 顶层 UniqueIdentifier 是单据那一行自己的编号（下单回显给商户、商户拿去查单的也是它）;
+// 单据种类看 Order.Type, 别拿 Order.UniqueIdentifier 去查单——那是另一张表的号, 查单接口不认。
+//
+// 只声明商户要消费的字段, 其余（tenantMember、汇率等）解析时忽略; 平台侧已剔除 fees / feeGroups,
 // 并把 channel 裁成只剩 name。报文不带 {code,data} 信封。
 type MerchantNotify struct {
-	// UniqueIdentifier 平台单号
+	// UniqueIdentifier 单据号 | 代收是收款单号、代付是付款单号, 与查单接口认的是同一个号
 	UniqueIdentifier string `json:"uniqueIdentifier"`
-	// ExternalIdentifier 商户侧外部单号
-	ExternalIdentifier string `json:"externalIdentifier"`
-	// Type 单据种类
-	Type OrderType `json:"type"`
-	// Status 订单状态 | 平台只在 SUCCEEDED / FAILED 终态推送
-	Status OrderStatus `json:"status"`
-	// BelongsTo 单据归属
-	BelongsTo string `json:"belongsTo,omitempty"`
-	// Amount 订单金额
-	Amount *Money `json:"amount,omitempty"`
-	// PaymentAmount 付款金额
-	PaymentAmount *Money `json:"paymentAmount,omitempty"`
-	// ReceiptAmount 收款金额
-	ReceiptAmount *Money `json:"receiptAmount,omitempty"`
-	// Product 命中的产品
-	Product *Product `json:"product,omitempty"`
-	// CallbackURL 本次交易实际使用的回调地址
-	CallbackURL string `json:"callbackURL,omitempty"`
-	// CreatedAt 创建时间
-	CreatedAt time.Time `json:"createdAt"`
-	// UpdatedAt 更新时间
-	UpdatedAt time.Time `json:"updatedAt"`
+	// Order 订单信息 | 种类、状态、金额、外部单号都在这一层
+	Order OrderResult `json:"order"`
+	// RedirectURL 付款跳转地址 | 仅代收单带, 渠道给的收银台地址
+	RedirectURL string `json:"redirectURL,omitempty"`
+	// ReturnURL 商户回跳地址 | 仅代收单带, 下单登记的原样回显
+	ReturnURL string `json:"returnURL,omitempty"`
+	// Type 收款方式 | 仅代付单带, 服务端从收款信息推导
+	Type ReceiptType `json:"type,omitempty"`
+	// ReceiptInformation 收款信息回显 | 仅代付单带
+	ReceiptInformation *ReceiptInformation `json:"receiptInformation,omitempty"`
 }
 
 // Response 响应信封

@@ -100,6 +100,10 @@ export class RerouteMoneyClient {
     });
   }
 
+  /**
+   * 查询代付单 | `identifier` 为付款单号（响应顶层的 `uniqueIdentifier`, 即 `payment_orders` 行自己的 uuid）
+   * 或商户外部单号（`order.externalIdentifier`）; 订单层的 `order.uniqueIdentifier` 不参与匹配, 拿它查必然查空
+   */
   public queryPaymentOrder(identifier: string) {
     return this.call<PaymentOrderResult>({
       // 路径参数直接拼进 url | 签名取的就是这份 url, 服务端验签用的 request.baseUrl 同样是含参数的完整路径
@@ -108,6 +112,10 @@ export class RerouteMoneyClient {
     });
   }
 
+  /**
+   * 查询代收单 | `identifier` 为收款单号（响应顶层的 `uniqueIdentifier`, 即 `collection_orders` 行自己的 uuid）
+   * 或商户外部单号（`order.externalIdentifier`）; 订单层的 `order.uniqueIdentifier` 不参与匹配
+   */
   public queryCollectionOrder(identifier: string) {
     return this.call<CollectionOrderResult>({
       url: `/v2/collection-order/${identifier}`,

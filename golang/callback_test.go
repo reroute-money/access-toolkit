@@ -16,9 +16,10 @@ import (
 	"time"
 )
 
-// testNotifyBody 平台推送的 Order 实体报文片段 | 字段形状取自 OrderCallbackService.pushMerchantNotify
-// 的实际序列化结果（Order 实体本身, 不带 {code,data} 信封, fees/feeGroups 已被剔除, channel 只剩 name）
-const testNotifyBody = `{"identifier":7,"uniqueIdentifier":"6f0f6c1a-2c94-4c1c-9c2f-2a1d3e4b5c6d","externalIdentifier":"DJP240101ABCDEFGH","belongsTo":"MERCHANT","amount":{"currency":"INR","value":100000},"paymentAmount":{"currency":"INR","value":100000},"receiptAmount":{"currency":"USDT","value":11700000},"status":"SUCCEEDED","type":"COLLECTION","product":{"type":"ONLINE_RECEIVE"},"callbackURL":"https://shop.example.com/api/v1/payments/webhook/reroute","channel":{"name":"Reroute Money"},"createdAt":"2026-10-09T00:00:00.000Z","updatedAt":"2026-10-09T00:01:00.000Z"}`
+// testNotifyBody 平台推送的业务单据报文片段 | 形状取自 OrderCallbackService.buildMerchantNotifyBody
+// 的实际序列化结果（代收推 collection_orders 那一行, 订单包在 order 里, 不带 {code,data} 信封,
+// fees/feeGroups 已被剔除, channel 只剩 name）
+const testNotifyBody = `{"identifier":7,"uniqueIdentifier":"6f0f6c1a-2c94-4c1c-9c2f-2a1d3e4b5c6d","redirectURL":"https://checkout.example.com/pay/6f0f6c1a","returnURL":"https://shop.example.com/orders/DJP240101ABCDEFGH/paid","order":{"identifier":1201,"uniqueIdentifier":"9a8b7c6d-5e4f-4a1b-8c9d-0e1f2a3b4c5d","externalIdentifier":"DJP240101ABCDEFGH","internalIdentifier":"CH-2026-0001","status":"SUCCEEDED","type":"COLLECTION","amount":{"currency":"INR","value":100000},"paymentAmount":{"currency":"INR","value":100000},"receiptAmount":{"currency":"USDT","value":11700000},"product":{"type":"ONLINE_RECEIVE"},"callbackURL":"https://shop.example.com/api/v1/payments/webhook/reroute","channel":{"name":"Reroute Money"},"createdAt":"2026-10-09T00:00:00.000Z","updatedAt":"2026-10-09T00:01:00.000Z"}}`
 
 const (
 	testNotifyPath           = "/api/v1/payments/webhook/reroute"
@@ -258,26 +259,70 @@ func TestParseMerchantNotify(t *testing.T) {
 	if err != nil {
 		t.Fatalf("解报文失败: %v", err)
 	}
+	// 顶层是单据那一行 | 商户拿去查单、存作自己那笔交易引用的号
 	if notify.UniqueIdentifier != "6f0f6c1a-2c94-4c1c-9c2f-2a1d3e4b5c6d" {
 		t.Errorf("uniqueIdentifier = %q", notify.UniqueIdentifier)
 	}
-	if notify.ExternalIdentifier != "DJP240101ABCDEFGH" {
-		t.Errorf("externalIdentifier = %q", notify.ExternalIdentifier)
+	if notify.RedirectURL != "https://checkout.example.com/pay/6f0f6c1a" {
+		t.Errorf("redirectURL = %q", notify.RedirectURL)
 	}
-	if notify.Status != OrderStatusSucceeded {
-		t.Errorf("status = %q", notify.Status)
+	if notify.ReturnURL != "https://shop.example.com/orders/DJP240101ABCDEFGH/paid" {
+		t.Errorf("returnURL = %q", notify.ReturnURL)
 	}
-	if notify.Type != OrderTypeCollection {
-		t.Errorf("type = %q", notify.Type)
+	// 交易事实在 order 那一层
+	if notify.Order.ExternalIdentifier != "DJP240101ABCDEFGH" {
+		t.Errorf("order.externalIdentifier = %q", notify.Order.ExternalIdentifier)
 	}
-	if notify.PaymentAmount == nil || notify.PaymentAmount.Currency != CurrencyINR || notify.PaymentAmount.Value != 100000 {
-		t.Errorf("paymentAmount = %+v", notify.PaymentAmount)
+	if notify.Order.InternalIdentifier != "CH-2026-0001" {
+		t.Errorf("order.internalIdentifier = %q", notify.Order.InternalIdentifier)
 	}
-	if notify.ReceiptAmount == nil || notify.ReceiptAmount.Currency != CurrencyUSDT || notify.ReceiptAmount.Value != 11700000 {
-		t.Errorf("receiptAmount = %+v", notify.ReceiptAmount)
+	if notify.Order.Status != OrderStatusSucceeded {
+		t.Errorf("order.status = %q", notify.Order.Status)
 	}
-	if notify.CallbackURL != "https://shop.example.com/api/v1/payments/webhook/reroute" {
-		t.Errorf("callbackURL = %q", notify.CallbackURL)
+	if notify.Order.Type != OrderTypeCollection {
+		t.Errorf("order.type = %q", notify.Order.Type)
+	}
+	if notify.Order.PaymentAmount == nil || notify.Order.PaymentAmount.Currency != CurrencyINR || notify.Order.PaymentAmount.Value != 100000 {
+		t.Errorf("order.paymentAmount = %+v", notify.Order.PaymentAmount)
+	}
+	if notify.Order.ReceiptAmount == nil || notify.Order.ReceiptAmount.Currency != CurrencyUSDT || notify.Order.ReceiptAmount.Value != 11700000 {
+		t.Errorf("order.receiptAmount = %+v", notify.Order.ReceiptAmount)
+	}
+	if notify.Order.CallbackURL != "https://shop.example.com/api/v1/payments/webhook/reroute" {
+		t.Errorf("order.callbackURL = %q", notify.Order.CallbackURL)
+	}
+	// 两个号不是一回事 | order.uniqueIdentifier 是 orders 表的号, 查单接口不认它, 别拿它覆盖单据号
+	if notify.Order.UniqueIdentifier == "" || notify.Order.UniqueIdentifier == notify.UniqueIdentifier {
+		t.Errorf("order.uniqueIdentifier = %q, 顶层 = %q", notify.Order.UniqueIdentifier, notify.UniqueIdentifier)
+	}
+	// 代收单不带代付那两列
+	if notify.Type != "" || notify.ReceiptInformation != nil {
+		t.Errorf("代收单不该带收款方式或收款信息, 实际 type=%q receiptInformation=%+v", notify.Type, notify.ReceiptInformation)
+	}
+}
+
+func TestParseMerchantNotifyPaymentDocument(t *testing.T) {
+	body := `{"uniqueIdentifier":"2b7d4c9e-1a3f-4d2c-8e5b-6a9c0d1e2f34","type":"UPI","receiptInformation":{"type":"UPI","identifier":"payee@okhdfcbank"},"order":{"uniqueIdentifier":"9a8b7c6d-5e4f-4a1b-8c9d-0e1f2a3b4c5d","externalIdentifier":"DJP240101IJKLMNOP","status":"SUCCEEDED","type":"PAYMENT","paymentAmount":{"currency":"INR","value":50000}}}`
+
+	notify, err := ParseMerchantNotify([]byte(body))
+	if err != nil {
+		t.Fatalf("解报文失败: %v", err)
+	}
+	if notify.UniqueIdentifier != "2b7d4c9e-1a3f-4d2c-8e5b-6a9c0d1e2f34" {
+		t.Errorf("uniqueIdentifier = %q", notify.UniqueIdentifier)
+	}
+	// 代付单顶层的 type 是收款方式, 不是单据种类（后者在 order.type）
+	if notify.Type != ReceiptTypeUPI {
+		t.Errorf("type = %q, 应为收款方式 UPI", notify.Type)
+	}
+	if notify.Order.Type != OrderTypePayment {
+		t.Errorf("order.type = %q", notify.Order.Type)
+	}
+	if notify.ReceiptInformation == nil || notify.ReceiptInformation.Identifier != "payee@okhdfcbank" {
+		t.Errorf("receiptInformation = %+v", notify.ReceiptInformation)
+	}
+	if notify.RedirectURL != "" {
+		t.Errorf("代付单不该带回跳地址, 实际 redirectURL = %q", notify.RedirectURL)
 	}
 }
 

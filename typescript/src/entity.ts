@@ -71,7 +71,13 @@ export type Money = {
   value: number;
 };
 
-/** 单据信息 | 只声明商户侧要消费的字段, 其余响应字段（渠道、费率、归属关系等）按未声明处理 */
+/**
+ * 订单信息 | 只声明商户侧要消费的字段, 其余响应字段（渠道、费率、归属关系等）按未声明处理
+ *
+ * `uniqueIdentifier` 是 `orders` 行自己的 uuid：平台下发给渠道当 `externalId` 用的就是它,
+ * 订单推送里也带着它, 但**查单接口不认它** —— 商户要存的是单据层的
+ * `CollectionOrderResult.uniqueIdentifier` / `PaymentOrderResult.uniqueIdentifier`
+ */
 export type OrderResult = {
   uniqueIdentifier: string;
   externalIdentifier: string;
@@ -91,7 +97,10 @@ export type OrderResult = {
   updatedAt: string;
 };
 
-/** 代付单查询结果 */
+/**
+ * 代付单查询结果 | `uniqueIdentifier` 是 `payment_orders` 行自己的 uuid（付款单号）,
+ * 查单接口按它或 `order.externalIdentifier`（商户外部单号）定位
+ */
 export type PaymentOrderResult = {
   uniqueIdentifier: string;
   order: OrderResult;
@@ -100,7 +109,10 @@ export type PaymentOrderResult = {
   receiptInformation?: ReceiptInformation;
 };
 
-/** 代收单查询结果 */
+/**
+ * 代收单查询结果 | `uniqueIdentifier` 是 `collection_orders` 行自己的 uuid（收款单号）,
+ * 查单接口按它或 `order.externalIdentifier`（商户外部单号）定位
+ */
 export type CollectionOrderResult = {
   uniqueIdentifier: string;
   order: OrderResult;

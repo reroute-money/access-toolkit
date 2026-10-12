@@ -47,7 +47,7 @@ const client = new RerouteMoneyClient({
 const value = 100; // 最小币种单位（分）
 const response = await client.makePaymentOrder({
   order: {
-    externalIdentifier: crypto.randomUUID(), // 商户单号 | 平台单号留空由服务端生成
+    externalIdentifier: crypto.randomUUID(), // 商户单号 | 单据号与订单号都由服务端生成，请求里不用带
     paymentAmount: { currency: 'INR', value },
     receiptAmount: { currency: 'INR' }, // 只给币种 → 服务端按命中汇率补齐
     product: { type: 'ONLINE_PAY' },
@@ -55,7 +55,7 @@ const response = await client.makePaymentOrder({
   receiptInformation: { type: 'UPI', identifier: 'payee@okhdfcbank' },
 });
 
-console.log(response.data.order.uniqueIdentifier, response.data.order.status);
+console.log(response.data.uniqueIdentifier, response.data.order.status);
 ```
 
 业务失败（HTTP 200 但信封 `code !== 'OK'`）抛 `RerouteMoneyException`，`code` / `message` 在实例上。
@@ -109,7 +109,7 @@ func main() {
 |------|----|----|------|
 | `PUT /v2/payment-order` | `makePaymentOrder` | `MakePaymentOrder` | 代付下单，收款信息必传（`ReceiptInformation`） |
 | `PUT /v2/collection-order` | `makeCollectionOrder` | `MakeCollectionOrder` | 代收下单，无收款信息，可带 `returnURL` |
-| `GET /v2/payment-order/{identifier}` | `queryPaymentOrder` | `QueryPaymentOrder` | 查单，`identifier` 可传平台单号或商户单号 |
+| `GET /v2/payment-order/{identifier}` | `queryPaymentOrder` | `QueryPaymentOrder` | 查单，`identifier` 可传单据号（响应顶层 `uniqueIdentifier`）或商户外部单号；订单层的 `order.uniqueIdentifier` 不参与匹配 |
 | `GET /v2/collection-order/{identifier}` | `queryCollectionOrder` | `QueryCollectionOrder` | 同上 |
 | `GET /v2/account` | `queryAccounts` | `QueryAccounts` | 列签名 `actAs` 成员名下的余额户与保证金户，无入参 |
 | `/v2/*` 之外的端点 | `call<T>(config)` | `access.Call[T](ctx, client, method, path, payload)` | 逃生入口，签名与解信封复用同一条链路 |
@@ -134,18 +134,18 @@ Authorization: Signature usingKey=..&actAs=..&generationTime=..&requestSignature
 
 ## 关键语义
 
-- **三个单号别混**：`order.externalIdentifier` 是**商户自己的单号**（下单带进来，成员级唯一）；`order.uniqueIdentifier` 是**平台单号**（下发给渠道当 `externalId` 用的就是它）；`order.internalIdentifier` 是**渠道单号**（平台拿到渠道结论才落得上，下单被渠道明确拒绝时为空，落定后不再变化，可用它去渠道侧核对这笔交易）。
+- **四个单号别混**：**单据号** `uniqueIdentifier` 在响应顶层（代收是收款单号、代付是付款单号，各是 `collection_orders` / `payment_orders` 行自己的 uuid）——查单接口认它，商户要存的、订单推送带的都是它；`order.externalIdentifier` 是**商户自己的单号**（下单带进来，成员级唯一）；`order.uniqueIdentifier` 是**订单号**（`orders` 行自己的 uuid，平台下发给渠道当 `externalId` 用的就是它，**查单接口不认它**，拿它去查必然查空）；`order.internalIdentifier` 是**渠道单号**（平台拿到渠道结论才落得上，下单被渠道明确拒绝时为空，落定后不再变化，可用它去渠道侧核对这笔交易）。
 - **两个地址别混**：`redirectURL` 是**去**渠道收银台的跳转地址（渠道给的，商户据此把付款人导过去；渠道没给则一直为空）；`returnURL` 是**回**商户的跳转地址（商户下单时登记，平台原样下发渠道，付款人付完后由渠道导回这里）。平台不校验 `returnURL` 归属哪个域名，也不把它拼到 `redirectURL` 上。
 - **金额**：两侧币种必传，至少一侧金额完整，缺失侧由服务端按命中汇率补齐（找不到汇率直接报错）。`value` 一律为最小币种单位（分）。
 - **幂等**：同一 `tenantMember` + `externalIdentifier` 重复下单复用库内单据；金额、收款信息、`returnURL` 不一致时报业务错——换了回跳地址就是另一笔导流口径，静默复用旧单会把付款人导回第一次登记的那个页面。
 
 ## 订单推送验签（平台 → 商户）
 
-单据进终态（`SUCCEEDED` / `FAILED`）时平台按 `order.callbackURL` 推一份 Order 报文，商户**必须先验签再落库**——回调路由对全网开放，谁都能构造一个 `status: SUCCEEDED` 的 POST。
+单据进终态（`SUCCEEDED` / `FAILED`）时平台按 `order.callbackURL` 推一份**业务单据**（代收推收款单、代付推付款单，订单信息包在 `order` 里，形状与查单响应同构），商户**必须先验签再落库**——回调路由对全网开放，谁都能构造一个 `status: SUCCEEDED` 的 POST。
 
 当前只有 Go 版提供入口（`ParseMerchantNotify` + `VerifyMerchantNotify`，规范串与出站签名同源，`Act-As` 固定为 `-`，密钥换成平台的 `platformPrivateKey`），细节见 [`golang/README.md`](golang/README.md)；TypeScript 版把 `platformPublicKey` 传进配置但暂无验签入口。
 
-要点：验签用的路径取**下单时登记的 `callbackURL` 的 pathname**，不是请求到达自己服务时的 `URL.Path`（挂在反代子路径下两者会错开）；报文先拿原始字节验签再解析；推送为至少一次投递，商户要按单号 + 状态幂等去重，并留主动查单作掉单兜底。
+要点：验签用的路径取**下单时登记的 `callbackURL` 的 pathname**，不是请求到达自己服务时的 `URL.Path`（挂在反代子路径下两者会错开）；报文先拿原始字节验签再解析；推送为至少一次投递，商户要按 `order.externalIdentifier`（商户自己的单号）+ `order.status` 幂等去重，并留主动查单作掉单兜底——查单传的是推送顶层的**单据号**或自己的外部单号，**不是** `order.uniqueIdentifier`。
 
 ## 开发
 

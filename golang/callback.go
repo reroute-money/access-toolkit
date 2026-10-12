@@ -109,7 +109,8 @@ func VerifyMerchantNotify(publicKeyPEM string, verification NotifyVerification) 
 	return nil
 }
 
-// ParseMerchantNotify 解订单推送报文 | 报文是 Order 实体本身, 不带 {code,data} 信封
+// ParseMerchantNotify 解订单推送报文 | 报文是业务单据本身（代收推收款单、代付推付款单）,
+// 订单信息包在 `order` 里, 不带 {code,data} 信封
 func ParseMerchantNotify(body []byte) (*MerchantNotify, error) {
 	var notify MerchantNotify
 	if err := json.Unmarshal(body, &notify); err != nil {
