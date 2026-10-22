@@ -11,10 +11,11 @@ Reroute Money 接入点 REST `/v2/*` 的官方客户端 | 同一套签名鉴权�
 
 ## 安装
 
-Go 版直接可 `go get`（本仓库 public，module path 指向 `golang/` 子目录）：
+Go 版直接可 `go get`（本仓库 public，module path 指向 `golang/` 子目录，首个标签 `golang/v0.0.1`）：
 
 ```bash
-go get github.com/reroute-money/access-toolkit/golang
+go get github.com/reroute-money/access-toolkit/golang          # 取最新标签
+go get github.com/reroute-money/access-toolkit/golang@v0.0.1   # 钉版本
 ```
 
 TypeScript 版尚未发布到 npm（`@reroute.money/access-toolkit` 当前 registry 404），先按源码方式接：
