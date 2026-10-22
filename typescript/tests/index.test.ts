@@ -102,7 +102,7 @@ uwIDAQAB
         type: 'BANK',
         accountNumber: '12345678900',
         payeeName: 'Ashok Kumar',
-        indianFinancialSystemCode: 'HDFC0001234',
+        bankCode: 'HDFC0001234',
         bankName: 'HDFC Bank',
       },
     });

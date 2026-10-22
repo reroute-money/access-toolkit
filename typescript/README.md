@@ -12,7 +12,7 @@ cd access-toolkit/typescript && pnpm install && pnpm run build
 npm install file:../access-toolkit/typescript   # 在商户项目里按路径引用
 ```
 
-发布后直接 `npm install @reroute.money/access-toolkit`，`exports` 已指向 `dist/`（ESM + CJS + `.d.ts`）。
+发布后直接 `npm install @reroute.money/access-toolkit`，`exports` 已指向 `dist/`（ESM + CJS + `.d.ts`）。运行时依赖 `axios`、`es-toolkit`、`dinero.js` 三个都会随之装好；币种表与后端同取 `dinero.js/currencies`，所以商户侧不需要另装币种库。
 
 ## 用法
 
@@ -52,6 +52,7 @@ console.log(response.data.order.status, response.data.order.internalIdentifier);
 | `RerouteMoneyException` | 业务错误 | HTTP 可能是 200，但信封 `code !== 'OK'` 即抛，`code` / `message` 挂在实例上 |
 | `RerouteMoneyUtility` | `signRequest` / `sign` / `throwIfNotOk` | 自定义 http 客户端时可复用同一条签名链路 |
 | `PaymentOrder`, `CollectionOrder`, `ReceiptInformation`, `Amount`, `Currency`, `OrderResult`, `PaymentOrderResult`, `CollectionOrderResult`, `OrderStatus`, `OrderType`, `Account`, `RerouteMoneyResponse` | 实体类型 | 与后端 `/v2/*` 请求/响应口径对齐 |
+| `CURRENCIES`, `CURRENCY_DEFINITION`, `getCurrencyPrecision` | 币种全集与币种表 | 与后端 `Currency` 枚举同取 dinero.js 的 ISO 4217 全量表加 USDT（167 个）；`getCurrencyPrecision` 给出该币种小数位，`value` 按它换算 |
 
 下单入参按 `DeepPartial<T>` 接收，`uniqueIdentifier` 之类的服务端生成字段可不传。
 

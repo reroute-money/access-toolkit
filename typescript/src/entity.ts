@@ -1,20 +1,19 @@
-/** 币种 | 与后端 Currency 枚举对齐 */
-export type Currency = 'INR' | 'USD';
+import { Currency } from './currency.ts';
 
-/** 金额 | value 为最小币种单位（分）, 下单时缺失一侧由服务端按命中汇率换算补齐（找不到汇率将报错） */
+/** 金额 | value 为最小币种单位（小数位由币种决定，用 `getCurrencyPrecision` 取：多数为分, VND/JPY 等无小数位, USDT 为 10^-6）, 下单时缺失一侧由服务端按命中汇率换算补齐（找不到汇率将报错） */
 export type Amount = {
   currency: Currency;
   value?: number;
 };
 
-/** 收款信息 | 与后端 ReceiptInformation 对齐：UPI 只给 VPA，银行给账号/户名/IFSC/开户行，链上给链名/地址 */
+/** 收款信息 | 与后端 ReceiptInformation 对齐：UPI 只给 VPA，银行给账号/户名/收款行编码/开户行，链上给链名/地址 */
 export type ReceiptInformation =
   | { type: 'UPI'; identifier: string }
   | {
       type: 'BANK';
       accountNumber: string;
       payeeName: string;
-      indianFinancialSystemCode: string;
+      bankCode: string;
       bankName: string;
     }
   | { type: 'BLOCKCHAIN'; chain: 'TRON' | 'ETHEREUM'; address: string };

@@ -132,7 +132,7 @@ Authorization: Signature usingKey=..&actAs=..&generationTime=..&requestSignature
 | 下单入参 | `DeepPartial<T>` | 字段直接可选（`omitempty`） |
 | 业务错误 | throw `RerouteMoneyException` | 返回 `*access.Error`（`Code` / `Message`），配 `errors.As` |
 | 响应单据 | 复用请求类型 | `OrderResult`，只声明商户侧消费的字段，多余字段解析时忽略 |
-| 币种 | `INR \| USD` | 另含后端已有的 `USDT`（链上出款） |
+| 币种 | 运行期引 `dinero.js/currencies`，`Currency` 由表派生，另导出 `CURRENCIES` / `getCurrencyPrecision` | 同一个包承诺零第三方依赖，所以 `currency.go` 把同一张表落成常量（167 个，与 TS 侧同源同序，手维护） |
 | `platformPublicKey` | 传入但未使用，没有验签入口 | `Config` 里保留，由 `VerifyMerchantNotify` 消费 |
 | 订单推送验签 | 无 | `VerifyMerchantNotify` + `ParseMerchantNotify` + `MerchantNotify` |
 

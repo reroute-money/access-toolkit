@@ -2,17 +2,7 @@ package access
 
 import "time"
 
-// Currency 币种 | 与后端 Currency 枚举对齐
-type Currency string
-
-// 币种取值
-const (
-	CurrencyINR  Currency = "INR"
-	CurrencyUSD  Currency = "USD"
-	CurrencyUSDT Currency = "USDT"
-)
-
-// Amount 金额 | Value 为最小币种单位（INR/USD 为分, USDT 为 10^-6）
+// Amount 金额 | Value 为最小币种单位（小数位由币种本身决定：多数为分, VND/JPY 等无小数位, USDT 为 10^-6）
 //
 // 下单时缺失一侧（Value 为 nil）由服务端按命中汇率换算补齐, 找不到汇率会报错。
 type Amount struct {
@@ -54,8 +44,8 @@ type ReceiptInformation struct {
 	AccountNumber string `json:"accountNumber,omitempty"`
 	// PayeeName 户名 | type=BANK 时必填
 	PayeeName string `json:"payeeName,omitempty"`
-	// IndianFinancialSystemCode IFSC | type=BANK 时必填
-	IndianFinancialSystemCode string `json:"indianFinancialSystemCode,omitempty"`
+	// BankCode 收款行编码 | type=BANK 时必填（印度 IFSC、菲律宾助记码、墨西哥 SPEI 行号、巴基斯坦联行号）
+	BankCode string `json:"bankCode,omitempty"`
 	// BankName 开户行 | type=BANK 时必填
 	BankName string `json:"bankName,omitempty"`
 	// Chain 链名 | type=BLOCKCHAIN 时必填
@@ -69,14 +59,14 @@ func NewUPIReceipt(identifier string) ReceiptInformation {
 	return ReceiptInformation{Type: ReceiptTypeUPI, Identifier: identifier}
 }
 
-// NewBankReceipt 银行收款 | 账号 / 户名 / IFSC / 开户行
-func NewBankReceipt(accountNumber, payeeName, indianFinancialSystemCode, bankName string) ReceiptInformation {
+// NewBankReceipt 银行收款 | 账号 / 户名 / 收款行编码 / 开户行
+func NewBankReceipt(accountNumber, payeeName, bankCode, bankName string) ReceiptInformation {
 	return ReceiptInformation{
-		Type:                      ReceiptTypeBANK,
-		AccountNumber:             accountNumber,
-		PayeeName:                 payeeName,
-		IndianFinancialSystemCode: indianFinancialSystemCode,
-		BankName:                  bankName,
+		Type:          ReceiptTypeBANK,
+		AccountNumber: accountNumber,
+		PayeeName:     payeeName,
+		BankCode:      bankCode,
+		BankName:      bankName,
 	}
 }
 
