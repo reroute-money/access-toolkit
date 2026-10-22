@@ -64,7 +64,7 @@ export type OrderStatus =
   | 'SUCCEEDED'
   | 'FAILED';
 
-/** 金额 | 服务端回填后两侧都完整, value 为最小币种单位（分） */
+/** 金额 | 服务端回填后两侧都完整, value 为最小币种单位（小数位由币种决定, 见 `getCurrencyPrecision`） */
 export type Money = {
   currency: Currency;
   value: number;
@@ -121,7 +121,7 @@ export type CollectionOrderResult = {
   returnURL?: string;
 };
 
-/** 账户 | 请求方成员名下的余额户与保证金户, 余额为最小币种单位（分） */
+/** 账户 | 请求方成员名下的余额户与保证金户, 余额为最小币种单位（小数位由币种决定） */
 export type Account = {
   uniqueIdentifier: string;
   /** 账户归属 | 接入方只会拿到自己名下的户 */

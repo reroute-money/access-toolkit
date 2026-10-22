@@ -118,7 +118,7 @@ type CollectionOrder struct {
 type Money struct {
 	// Currency 币种
 	Currency Currency `json:"currency"`
-	// Value 最小币种单位（分）
+	// Value 最小币种单位 | 小数位由币种决定（多数为分, VND/JPY 无小数位, USDT 为 10^-6）
 	Value int64 `json:"value"`
 }
 
@@ -215,7 +215,7 @@ const (
 	AccountTypeMargin  AccountType = "MARGIN"
 )
 
-// Account 账户 | 查询按签名里的 actAs 定位成员, 只会回请求方名下的户; 余额为最小币种单位（分）
+// Account 账户 | 查询按签名里的 actAs 定位成员, 只会回请求方名下的户; 余额为最小币种单位（小数位由币种决定）
 type Account struct {
 	// UniqueIdentifier 账户编号
 	UniqueIdentifier string `json:"uniqueIdentifier"`
