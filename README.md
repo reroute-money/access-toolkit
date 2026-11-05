@@ -11,12 +11,14 @@ Reroute Money 接入点 REST `/v2/*` 的官方客户端 | 同一套签名鉴权�
 
 ## 安装
 
-Go 版直接可 `go get`（本仓库 public，module path 指向 `golang/` 子目录，首个标签 `golang/v0.0.1`）：
+Go 版直接可 `go get`（本仓库 public，module path 指向 `golang/` 子目录，最新标签 `golang/v0.0.2`）：
 
 ```bash
 go get github.com/reroute-money/access-toolkit/golang          # 取最新标签
-go get github.com/reroute-money/access-toolkit/golang@v0.0.1   # 钉版本
+go get github.com/reroute-money/access-toolkit/golang@v0.0.2   # 钉版本
 ```
+
+`v0.0.2`（2026-11-05）起 `OrderResult` 才带 `CancelAt`（到点自动撤销的时刻）与 `CallbackStatus`（订单推送的投递进度），`OrderStatus` 也才声明 `CANCELED`——`v0.0.1` 里这三个都没有，旧版会把它们解析丢弃。
 
 TypeScript 版已发布到 npm（`@reroute.money/access-toolkit`，`latest` 起 `0.0.1`）：
 

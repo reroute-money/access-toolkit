@@ -10,7 +10,9 @@ go get github.com/reroute-money/access-toolkit/golang
 
 module path 指向仓库的 `golang/` 子目录：Go 对 `github.com` 是硬编码解析（不会去问你自己域名的 `?go-get=1`），所以这条依赖本仓库是 **public** 的 `github.com/reroute-money/access-toolkit`，且本目录是仓库里唯一的 Go module（`typescript/` 不参与解析）。
 
-发版打 tag 两种都行：优先带子目录前缀的 `golang/v0.0.1`（语义明确）；仓库级 `v0.0.1` 也有效，Go 在找不到前缀标签时回落到仓库级标签。首个标签 `golang/v0.0.1`（2026-10-22）已打，上面那条 `go get` 与 `@latest` 现在都解析到它，不再是从默认分支取的伪版本；想钉住版本就写 `go get github.com/reroute-money/access-toolkit/golang@v0.0.1`。
+发版打 tag 两种都行：优先带子目录前缀的 `golang/v0.0.2`（语义明确）；仓库级 `v0.0.2` 也有效，Go 在找不到前缀标签时回落到仓库级标签。首个标签 `golang/v0.0.1`（2026-10-22），当前最新 `golang/v0.0.2`（2026-11-05），上面那条 `go get` 与 `@latest` 解析到最新标签，不再是从默认分支取的伪版本；想钉住版本就写 `go get github.com/reroute-money/access-toolkit/golang@v0.0.2`。
+
+`v0.0.1` 里没有 `OrderResult.CancelAt`、`OrderResult.CallbackStatus` 和 `OrderStatusCanceled`——用这两个字段或要判撤销态请先升到 `v0.0.2`（旧版 json 解析会把未声明的列直接丢弃，不报错）。
 
 **这个版本有一处不兼容改动**：`ReceiptInformation` 的收款行编码字段是 `BankCode`（原 `IndianFinancialSystemCode`，因该列印度填 IFSC、菲律宾填助记码、墨西哥填 SPEI 行号、巴基斯坦填银行码，改成通路中性的名字），升级时同步改调用点与 json 键名 `bankCode`。
 
