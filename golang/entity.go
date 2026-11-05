@@ -129,8 +129,27 @@ type OrderStatus string
 const (
 	OrderStatusCreated    OrderStatus = "CREATED"
 	OrderStatusProcessing OrderStatus = "PROCESSING"
-	OrderStatusSucceeded  OrderStatus = "SUCCEEDED"
-	OrderStatusFailed     OrderStatus = "FAILED"
+	// OrderStatusRejected 渠道驳回 | 代付单被下游渠道明确拒绝，非终态：不推订单推送，钱停在冻结桶等运营改派渠道或人工置失败，只经查单可见
+	OrderStatusRejected  OrderStatus = "REJECTED"
+	OrderStatusSucceeded OrderStatus = "SUCCEEDED"
+	OrderStatusFailed    OrderStatus = "FAILED"
+	// OrderStatusCanceled 已撤销 | 终态：到 cancelAt 仍未落定的单由平台撤掉，会推订单推送；改派渠道不重置 cancelAt
+	OrderStatusCanceled OrderStatus = "CANCELED"
+)
+
+// OrderCallbackStatus 订单推送的投递状态 | 平台侧把结论推给 callbackURL 的进度, 建单登记了地址就是 PENDING
+type OrderCallbackStatus string
+
+// 订单推送投递状态取值
+const (
+	// OrderCallbackStatusNotRequired 未登记回调地址 | 这笔单不会有订单推送, 结论只经查单可见
+	OrderCallbackStatusNotRequired OrderCallbackStatus = "NOT_REQUIRED"
+	// OrderCallbackStatusPending 待推送 | 建单初值, 以及每次推送失败后排重投期间的状态
+	OrderCallbackStatusPending OrderCallbackStatus = "PENDING"
+	// OrderCallbackStatusSucceeded 商户已收下并应答成功
+	OrderCallbackStatusSucceeded OrderCallbackStatus = "SUCCEEDED"
+	// OrderCallbackStatusFailed 重投次数用尽仍未推达 | 结论以查单为准, 也可请运营在后台补推
+	OrderCallbackStatusFailed OrderCallbackStatus = "FAILED"
 )
 
 // OrderType 单据种类
@@ -157,6 +176,8 @@ type OrderResult struct {
 	Type OrderType `json:"type"`
 	// Status 订单状态
 	Status OrderStatus `json:"status"`
+	// CancelAt 自动撤销时刻 | 到点仍未落定的单由平台撤成 CANCELED; 下单时定好, 改派渠道不重置
+	CancelAt *time.Time `json:"cancelAt,omitempty"`
 	// PaymentAmount 付款金额
 	PaymentAmount *Money `json:"paymentAmount,omitempty"`
 	// ReceiptAmount 收款金额
@@ -167,6 +188,8 @@ type OrderResult struct {
 	Product *Product `json:"product,omitempty"`
 	// CallbackURL 本次交易实际使用的回调地址
 	CallbackURL string `json:"callbackURL,omitempty"`
+	// CallbackStatus 订单推送投递状态 | 首推报文里带的是建单初值 PENDING, 投递结论落库后由后续推送或查单给出
+	CallbackStatus OrderCallbackStatus `json:"callbackStatus,omitempty"`
 	// CreatedAt 创建时间
 	CreatedAt time.Time `json:"createdAt"`
 	// UpdatedAt 更新时间

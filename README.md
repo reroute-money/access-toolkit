@@ -18,16 +18,19 @@ go get github.com/reroute-money/access-toolkit/golang          # 取最新标签
 go get github.com/reroute-money/access-toolkit/golang@v0.0.1   # 钉版本
 ```
 
-TypeScript 版尚未发布到 npm（`@reroute.money/access-toolkit` 当前 registry 404），先按源码方式接：
+TypeScript 版已发布到 npm（`@reroute.money/access-toolkit`，`latest` 起 `0.0.1`）：
+
+```bash
+npm install @reroute.money/access-toolkit
+```
+
+`package.json` 的 `exports` 指向 `dist/`（ESM + CJS + `.d.ts`），运行时依赖 `axios`、`es-toolkit`、`dinero.js` 随之装好。要对源码或试未发布的改动，再按源码方式接：
 
 ```bash
 git clone https://github.com/reroute-money/access-toolkit.git
 cd access-toolkit/typescript && pnpm install && pnpm run build
-# 然后在商户项目里按路径引用
-npm install file:../access-toolkit/typescript
+npm install file:../access-toolkit/typescript   # 在商户项目里按路径引用
 ```
-
-发布后 `npm install @reroute.money/access-toolkit` 即可，`package.json` 的 `exports` 已指向 `dist/`。
 
 ## 快速上手
 
@@ -140,10 +143,13 @@ Authorization: Signature usingKey=..&actAs=..&generationTime=..&requestSignature
 - **币种**：全量开量，ISO 4217 三字码加链上出款用的 USDT 共 167 个，与后端 `Currency` 枚举同一张表（dinero.js 的 `currencies`）。TypeScript 版运行期直接引这张表，导出 `CURRENCIES` 与 `getCurrencyPrecision`（INR 2、VND 0、KWD 3、USDT 6）；Go 版没有标准库币种表，这个包又承诺零第三方依赖，所以同一张表以常量形式落在 `golang/currency.go`（手维护，与 TS 侧同源同序）。能不能换算成交另看该币种有没有配汇率与渠道。
 - **金额**：两侧币种必传，至少一侧金额完整，缺失侧由服务端按命中汇率补齐（找不到汇率直接报错）。`value` 一律为最小币种单位，小数位由币种本身决定（多数为分，VND/JPY 等无小数位，USDT 为 10^-6）。
 - **幂等**：同一 `tenantMember` + `externalIdentifier` 重复下单复用库内单据；金额、收款信息、`returnURL` 不一致时报业务错——换了回跳地址就是另一笔导流口径，静默复用旧单会把付款人导回第一次登记的那个页面。
+- **状态**：`order.status` 取 `CREATED` / `PROCESSING` / `REJECTED` / `SUCCEEDED` / `FAILED` / `CANCELED`，终态是 `SUCCEEDED`、`FAILED` 与 `CANCELED`。`REJECTED` 是渠道驳回（仅代付单）：下游渠道明确拒绝了这一轮出款，平台不动资金也不推订单推送，等运营换渠道改派或人工置失败——改派成功后同一张单会重新往前走到 `SUCCEEDED`，人工判失败才落 `FAILED`。商户看到 `REJECTED` 只当「本轮未走通」，别落终态：既不要结算退款，也不要换单号重下（同一 `externalIdentifier` 会被幂等复用回这张驳回单），继续查单等平台给最终结论。
+- **到点自动撤销**：`order.cancelAt` 是平台给这笔单定的到期时刻（下单时定好，改派渠道不重置），到点仍停在 `CREATED` 的单由平台撤成 `CANCELED`，撤销同样会推订单推送。商户要盯的是这个时刻，别自己按「下单后 N 分钟」写死。
+- **推送投不投得出去**：`order.callbackStatus` 取 `NOT_REQUIRED` / `PENDING` / `SUCCEEDED` / `FAILED`，是我方把结论推给 `callbackURL` 的投递进度。下单登记了回调地址就是 `PENDING`（**首推报文里带的也是 `PENDING`**，那一列的结论要等这次投递落库才翻转），重投次数用尽仍推不达才落 `FAILED`。它只说明「通知发出去了没有」，交易结论永远以 `order.status` 与查单为准，商户不必据此做任何资金动作。
 
 ## 订单推送验签（平台 → 商户）
 
-单据进终态（`SUCCEEDED` / `FAILED`）时平台按 `order.callbackURL` 推一份**业务单据**（代收推收款单、代付推付款单，订单信息包在 `order` 里，形状与查单响应同构），商户**必须先验签再落库**——回调路由对全网开放，谁都能构造一个 `status: SUCCEEDED` 的 POST。
+单据进终态（`SUCCEEDED` / `FAILED` / `CANCELED`）时平台按 `order.callbackURL` 推一份**业务单据**（代收推收款单、代付推付款单，订单信息包在 `order` 里，形状与查单响应同构），商户**必须先验签再落库**——回调路由对全网开放，谁都能构造一个 `status: SUCCEEDED` 的 POST。
 
 当前只有 Go 版提供入口（`ParseMerchantNotify` + `VerifyMerchantNotify`，规范串与出站签名同源，`Act-As` 固定为 `-`，密钥换成平台的 `platformPrivateKey`），细节见 [`golang/README.md`](golang/README.md)；TypeScript 版把 `platformPublicKey` 传进配置但暂无验签入口。
 

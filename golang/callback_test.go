@@ -19,7 +19,7 @@ import (
 // testNotifyBody 平台推送的业务单据报文片段 | 形状取自 OrderCallbackService.buildMerchantNotifyBody
 // 的实际序列化结果（代收推 collection_orders 那一行, 订单包在 order 里, 不带 {code,data} 信封,
 // fees/feeGroups 已被剔除, channel 只剩 name）
-const testNotifyBody = `{"identifier":7,"uniqueIdentifier":"6f0f6c1a-2c94-4c1c-9c2f-2a1d3e4b5c6d","redirectURL":"https://checkout.example.com/pay/6f0f6c1a","returnURL":"https://shop.example.com/orders/DJP240101ABCDEFGH/paid","order":{"identifier":1201,"uniqueIdentifier":"9a8b7c6d-5e4f-4a1b-8c9d-0e1f2a3b4c5d","externalIdentifier":"DJP240101ABCDEFGH","internalIdentifier":"CH-2026-0001","status":"SUCCEEDED","type":"COLLECTION","amount":{"currency":"INR","value":100000},"paymentAmount":{"currency":"INR","value":100000},"receiptAmount":{"currency":"USDT","value":11700000},"product":{"type":"ONLINE_RECEIVE"},"callbackURL":"https://shop.example.com/api/v1/payments/webhook/reroute","channel":{"name":"Reroute Money"},"createdAt":"2026-10-09T00:00:00.000Z","updatedAt":"2026-10-09T00:01:00.000Z"}}`
+const testNotifyBody = `{"identifier":7,"uniqueIdentifier":"6f0f6c1a-2c94-4c1c-9c2f-2a1d3e4b5c6d","redirectURL":"https://checkout.example.com/pay/6f0f6c1a","returnURL":"https://shop.example.com/orders/DJP240101ABCDEFGH/paid","order":{"identifier":1201,"uniqueIdentifier":"9a8b7c6d-5e4f-4a1b-8c9d-0e1f2a3b4c5d","externalIdentifier":"DJP240101ABCDEFGH","internalIdentifier":"CH-2026-0001","status":"SUCCEEDED","cancelAt":"2026-11-16T00:00:00.000Z","type":"COLLECTION","amount":{"currency":"INR","value":100000},"paymentAmount":{"currency":"INR","value":100000},"receiptAmount":{"currency":"USDT","value":11700000},"product":{"type":"ONLINE_RECEIVE"},"callbackURL":"https://shop.example.com/api/v1/payments/webhook/reroute","callbackStatus":"SUCCEEDED","channel":{"name":"Reroute Money"},"createdAt":"2026-10-09T00:00:00.000Z","updatedAt":"2026-10-09T00:01:00.000Z"}}`
 
 const (
 	testNotifyPath           = "/api/v1/payments/webhook/reroute"
@@ -290,6 +290,13 @@ func TestParseMerchantNotify(t *testing.T) {
 	}
 	if notify.Order.CallbackURL != "https://shop.example.com/api/v1/payments/webhook/reroute" {
 		t.Errorf("order.callbackURL = %q", notify.Order.CallbackURL)
+	}
+	// 这两列没声明时被解析直接丢, 商户看到的是「没有撤销时刻、推送状态未知」而不是「服务端没给」
+	if notify.Order.CallbackStatus != OrderCallbackStatusSucceeded {
+		t.Errorf("order.callbackStatus = %q", notify.Order.CallbackStatus)
+	}
+	if notify.Order.CancelAt == nil || notify.Order.CancelAt.UTC().Format(time.RFC3339) != "2026-11-16T00:00:00Z" {
+		t.Errorf("order.cancelAt = %+v", notify.Order.CancelAt)
 	}
 	// 两个号不是一回事 | order.uniqueIdentifier 是 orders 表的号, 查单接口不认它, 别拿它覆盖单据号
 	if notify.Order.UniqueIdentifier == "" || notify.Order.UniqueIdentifier == notify.UniqueIdentifier {

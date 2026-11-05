@@ -57,10 +57,26 @@ export type RerouteMoneyResponse<T> = {
 /** 单据种类 | 由服务端按产品形态推导 */
 export type OrderType = 'PAYMENT' | 'COLLECTION';
 
-/** 订单状态 */
+/**
+ * 订单状态 | `REJECTED` 是渠道驳回：代付单被下游渠道明确拒绝, 非终态, 不推订单推送,
+ * 钱停在冻结桶等运营改派渠道或人工置失败, 商户只经查单看得到它。
+ * `CANCELED` 是到点撤销：`cancelAt` 到点仍未落定的单由平台撤成终态, 会推订单推送。
+ */
 export type OrderStatus =
   | 'CREATED'
   | 'PROCESSING'
+  | 'REJECTED'
+  | 'SUCCEEDED'
+  | 'FAILED'
+  | 'CANCELED';
+
+/**
+ * 订单推送投递状态 | 平台把结论推给 `callbackURL` 的进度。
+ * 建单登记了回调地址就是 `PENDING`（首推报文里带的也是它）, 投递结论落库后才转成 `SUCCEEDED`/`FAILED`。
+ */
+export type OrderCallbackStatus =
+  | 'NOT_REQUIRED'
+  | 'PENDING'
   | 'SUCCEEDED'
   | 'FAILED';
 
@@ -87,11 +103,15 @@ export type OrderResult = {
   internalIdentifier?: string;
   type: OrderType;
   status: OrderStatus;
+  /** 自动撤销时刻 | 到点仍未落定的单由平台撤成 `CANCELED`; 下单时定好, 改派渠道不重置 */
+  cancelAt?: string;
   paymentAmount: Money;
   receiptAmount: Money;
   feeAmount?: Money;
   product?: { type: string };
   callbackURL?: string;
+  /** 订单推送投递状态 | 首推报文里带的是建单初值 `PENDING`, 投递结论落库后由后续推送或查单给出 */
+  callbackStatus?: OrderCallbackStatus;
   createdAt: string;
   updatedAt: string;
 };

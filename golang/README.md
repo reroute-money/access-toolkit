@@ -80,10 +80,11 @@ func main() {
 - `/v2/*` 之外的端点用 `access.Call[T](ctx, client, method, path, payload)`（对应 TS 的 `client.call<T>()`）。
 - 四个单号别混：**单据号** `uniqueIdentifier`（响应顶层，代收是收款单号、代付是付款单号，查单接口认它，商户要存的、回调推送顶层带的都是它），`order.externalIdentifier` 是**商户自己的单号**（下单带进来，成员级唯一），`order.uniqueIdentifier` 是**订单号**（另一张表的号，平台下发给渠道当 `externalId` 用的就是它，查单接口不认它，所以不要拿它去查单），`order.internalIdentifier` 是**渠道单号**（渠道给出的订单编号，平台拿到渠道结论才落得上，下单被渠道明确拒绝时为空；落定后不会再变，可用它去渠道侧核对这笔交易）。
 - 两个地址也别混：`redirectURL` 是**去**渠道收银台的跳转地址（渠道给的，商户据此把付款人导过去；渠道没给则一直为空）；`returnURL` 是**回**商户的跳转地址（商户下单时登记，平台原样下发渠道，付款人付完后由渠道导回这里）。平台都不校验 `returnURL` 归属哪个域名，也不把它拼到 `redirectURL` 上。
+- `order.CancelAt` 是**到点自动撤销的时刻**（下单时定好、改派渠道不重置，指针类型：这列没给就是 nil），到点仍停在 `CREATED` 的单由平台撤成 `CANCELED`，撤销同样推订单推送；`order.CallbackStatus` 是**我方推送的投递进度**（`NOT_REQUIRED`/`PENDING`/`SUCCEEDED`/`FAILED`，登记了回调地址建单就是 `PENDING`，首推报文里带的也是它），只说明通知发出去没有，交易结论以 `order.Status` 与查单为准。
 
 ## 订单推送验签（我方→商户）
 
-单据进终态（`SUCCEEDED` / `FAILED`）时平台按 `order.callbackURL` 推一份**业务单据**给商户（代收推收款单、代付推付款单，订单信息包在 `order` 里，与查单响应同构），商户**必须先验签再落库**——回调路由对全网开放，谁都能构造一个 `status: SUCCEEDED` 的 POST。
+单据进终态（`SUCCEEDED` / `FAILED` / `CANCELED`）时平台按 `order.callbackURL` 推一份**业务单据**给商户（代收推收款单、代付推付款单，订单信息包在 `order` 里，与查单响应同构），商户**必须先验签再落库**——回调路由对全网开放，谁都能构造一个 `status: SUCCEEDED` 的 POST。
 
 ```go
 notify, err := access.ParseMerchantNotify(rawBody)  // 报文是业务单据，订单包在 order 里，不带 {code,data} 信封

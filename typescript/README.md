@@ -4,15 +4,19 @@ Reroute Money 接入点 REST `/v2/*` 的 TypeScript 客户端 | 签名鉴权、�
 
 ## 安装
 
-包尚未发布到 npm（`@reroute.money/access-toolkit` 当前 registry 404），先按源码方式接：
+包已发布到 npm（`@reroute.money/access-toolkit`，`latest` 起 `0.0.1`）：
+
+```bash
+npm install @reroute.money/access-toolkit
+```
+
+`exports` 指向 `dist/`（ESM + CJS + `.d.ts`）。运行时依赖 `axios`、`es-toolkit`、`dinero.js` 三个都会随之装好；币种表与后端同取 `dinero.js/currencies`，所以商户侧不需要另装币种库。要对源码或试未发布的改动，再按源码方式接：
 
 ```bash
 git clone https://github.com/reroute-money/access-toolkit.git
 cd access-toolkit/typescript && pnpm install && pnpm run build
 npm install file:../access-toolkit/typescript   # 在商户项目里按路径引用
 ```
-
-发布后直接 `npm install @reroute.money/access-toolkit`，`exports` 已指向 `dist/`（ESM + CJS + `.d.ts`）。运行时依赖 `axios`、`es-toolkit`、`dinero.js` 三个都会随之装好；币种表与后端同取 `dinero.js/currencies`，所以商户侧不需要另装币种库。
 
 ## 用法
 
