@@ -10,9 +10,9 @@ go get github.com/reroute-money/access-toolkit/golang
 
 module path 指向仓库的 `golang/` 子目录：Go 对 `github.com` 是硬编码解析（不会去问你自己域名的 `?go-get=1`），所以这条依赖本仓库是 **public** 的 `github.com/reroute-money/access-toolkit`，且本目录是仓库里唯一的 Go module（`typescript/` 不参与解析）。
 
-发版打 tag 两种都行：优先带子目录前缀的 `golang/v0.0.2`（语义明确）；仓库级 `v0.0.2` 也有效，Go 在找不到前缀标签时回落到仓库级标签。首个标签 `golang/v0.0.1`（2026-10-22），当前最新 `golang/v0.0.2`（2026-11-05），上面那条 `go get` 与 `@latest` 解析到最新标签，不再是从默认分支取的伪版本；想钉住版本就写 `go get github.com/reroute-money/access-toolkit/golang@v0.0.2`。
+发版打 tag 两种都行：优先带子目录前缀的 `golang/v0.0.3`（语义明确）；仓库级 `v0.0.3` 也有效，Go 在找不到前缀标签时回落到仓库级标签。首个标签 `golang/v0.0.1`（2026-10-22），当前最新 `golang/v0.0.3`（2026-11-05），上面那条 `go get` 与 `@latest` 解析到最新标签，不再是从默认分支取的伪版本；想钉住版本就写 `go get github.com/reroute-money/access-toolkit/golang@v0.0.3`。
 
-`v0.0.1` 里没有 `OrderResult.CancelAt`、`OrderResult.CallbackStatus` 和 `OrderStatusCanceled`——用这两个字段或要判撤销态请先升到 `v0.0.2`（旧版 json 解析会把未声明的列直接丢弃，不报错）。
+`v0.0.1` 里没有 `OrderResult.CancelAt`、`OrderResult.CallbackStatus` 和 `OrderStatusCanceled`——用这两个字段或要判撤销态请先升到 `v0.0.2`（旧版 json 解析会把未声明的列直接丢弃，不报错）。**`v0.0.3` 破坏性**：`OrderResult.InternalIdentifier` 已删除（渠道单号不再下发，读它的调用点会编译失败），响应里的产品层类型从 `Product` 换成 `OrderProduct`（`Type` + 展示名 `Name`；只读 `.Product.Type` 的代码不用改）。
 
 **这个版本有一处不兼容改动**：`ReceiptInformation` 的收款行编码字段是 `BankCode`（原 `IndianFinancialSystemCode`，因该列印度填 IFSC、菲律宾填助记码、墨西哥填 SPEI 行号、巴基斯坦填银行码，改成通路中性的名字），升级时同步改调用点与 json 键名 `bankCode`。
 
@@ -80,7 +80,7 @@ func main() {
 - 账户：`client.QueryAccounts(ctx)` 列签名 `actAs` 成员名下的余额户与保证金户，无入参。
 - 幂等：同一 `tenantMember` + `externalIdentifier` 重复下单复用库内单据；金额/收款信息/`returnURL` 不一致时报业务错（换了回跳地址就是另一笔导流口径，静默复用旧单会把付款人导回第一次登记的那个页面）。
 - `/v2/*` 之外的端点用 `access.Call[T](ctx, client, method, path, payload)`（对应 TS 的 `client.call<T>()`）。
-- 四个单号别混：**单据号** `uniqueIdentifier`（响应顶层，代收是收款单号、代付是付款单号，查单接口认它，商户要存的、回调推送顶层带的都是它），`order.externalIdentifier` 是**商户自己的单号**（下单带进来，成员级唯一），`order.uniqueIdentifier` 是**订单号**（另一张表的号，平台下发给渠道当 `externalId` 用的就是它，查单接口不认它，所以不要拿它去查单），`order.internalIdentifier` 是**渠道单号**（渠道给出的订单编号，平台拿到渠道结论才落得上，下单被渠道明确拒绝时为空；落定后不会再变，可用它去渠道侧核对这笔交易）。
+- 三个单号别混：**单据号** `uniqueIdentifier`（响应顶层，代收是收款单号、代付是付款单号，查单接口认它，商户要存的、回调推送顶层带的都是它），`order.externalIdentifier` 是**商户自己的单号**（下单带进来，成员级唯一），`order.uniqueIdentifier` 是**订单号**（另一张表的号，平台下发给渠道当 `externalId` 用的就是它，查单接口不认它，所以不要拿它去查单）。渠道给出的单号（`internalIdentifier`）**自 2026-11-05 起不再下发**，`OrderResult` 里已删掉这个字段，结构体恒为零值；要与渠道侧对账按渠道账单或找运营取号。
 - 两个地址也别混：`redirectURL` 是**去**渠道收银台的跳转地址（渠道给的，商户据此把付款人导过去；渠道没给则一直为空）；`returnURL` 是**回**商户的跳转地址（商户下单时登记，平台原样下发渠道，付款人付完后由渠道导回这里）。平台都不校验 `returnURL` 归属哪个域名，也不把它拼到 `redirectURL` 上。
 - `order.CancelAt` 是**到点自动撤销的时刻**（下单时定好、改派渠道不重置，指针类型：这列没给就是 nil），到点仍停在 `CREATED` 的单由平台撤成 `CANCELED`，撤销同样推订单推送；`order.CallbackStatus` 是**我方推送的投递进度**（`NOT_REQUIRED`/`PENDING`/`SUCCEEDED`/`FAILED`，登记了回调地址建单就是 `PENDING`，首推报文里带的也是它），只说明通知发出去没有，交易结论以 `order.Status` 与查单为准。
 

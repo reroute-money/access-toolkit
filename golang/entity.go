@@ -81,6 +81,14 @@ type Product struct {
 	Type string `json:"type"`
 }
 
+// OrderProduct 响应里的产品 | 比下单那一份多带出展示名 Name; 产品关系没加载时这一层是空对象, 两个字段都是零值
+type OrderProduct struct {
+	// Type 产品类型 | 如 ONLINE_PAY / ONLINE_RECEIVE
+	Type string `json:"type"`
+	// Name 产品名 | 展示用
+	Name string `json:"name,omitempty"`
+}
+
 // OrderRequest 订单公共入参 | 付款/收款两侧币种必传, 金额至少一侧完整
 type OrderRequest struct {
 	// UniqueIdentifier 平台单号 | 留空由服务端生成
@@ -162,16 +170,14 @@ const (
 )
 
 // OrderResult 服务端回填后的单据 | 只声明商户侧要消费的字段,
-// 其余响应字段（渠道、费率、商户/代理关系等）解析时直接忽略
+// 其余响应字段（渠道、费率、商户/代理关系等）解析时直接忽略。
+// 渠道单号 internalIdentifier 自 2026-11-05 起不再下发, 对账改走渠道侧账单或找运营
 type OrderResult struct {
 	// UniqueIdentifier 订单号 | orders 行自己的 uuid, 下发给渠道当 externalId、订单推送带的也是它;
 	// 查单接口不认它, 商户要存的是单据层的 CollectionOrderResult.UniqueIdentifier / PaymentOrderResult.UniqueIdentifier
 	UniqueIdentifier string `json:"uniqueIdentifier"`
 	// ExternalIdentifier 外部单号
 	ExternalIdentifier string `json:"externalIdentifier"`
-	// InternalIdentifier 渠道单号 | 下游渠道给出的订单编号, 由平台在拿到渠道结论时落库;
-	// 下单被渠道明确拒绝或渠道没给号时为空, 落定后不再变化
-	InternalIdentifier string `json:"internalIdentifier,omitempty"`
 	// Type 单据种类 | 由服务端按产品形态推导
 	Type OrderType `json:"type"`
 	// Status 订单状态
@@ -184,8 +190,8 @@ type OrderResult struct {
 	ReceiptAmount *Money `json:"receiptAmount,omitempty"`
 	// FeeAmount 手续费 | 按付款侧计
 	FeeAmount *Money `json:"feeAmount,omitempty"`
-	// Product 命中的产品
-	Product *Product `json:"product,omitempty"`
+	// Product 命中的产品 | 带 Type 与展示名 Name
+	Product *OrderProduct `json:"product,omitempty"`
 	// CallbackURL 本次交易实际使用的回调地址
 	CallbackURL string `json:"callbackURL,omitempty"`
 	// CallbackStatus 订单推送投递状态 | 首推报文里带的是建单初值 PENDING, 投递结论落库后由后续推送或查单给出

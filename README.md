@@ -11,14 +11,14 @@ Reroute Money 接入点 REST `/v2/*` 的官方客户端 | 同一套签名鉴权�
 
 ## 安装
 
-Go 版直接可 `go get`（本仓库 public，module path 指向 `golang/` 子目录，最新标签 `golang/v0.0.2`）：
+Go 版直接可 `go get`（本仓库 public，module path 指向 `golang/` 子目录，最新标签 `golang/v0.0.3`）：
 
 ```bash
 go get github.com/reroute-money/access-toolkit/golang          # 取最新标签
-go get github.com/reroute-money/access-toolkit/golang@v0.0.2   # 钉版本
+go get github.com/reroute-money/access-toolkit/golang@v0.0.3   # 钉版本
 ```
 
-`v0.0.2`（2026-11-05）起 `OrderResult` 才带 `CancelAt`（到点自动撤销的时刻）与 `CallbackStatus`（订单推送的投递进度），`OrderStatus` 也才声明 `CANCELED`——`v0.0.1` 里这三个都没有，旧版会把它们解析丢弃。
+`v0.0.2`（2026-11-05）起 `OrderResult` 才带 `CancelAt`（到点自动撤销的时刻）与 `CallbackStatus`（订单推送的投递进度），`OrderStatus` 也才声明 `CANCELED`——`v0.0.1` 里这三个都没有，旧版会把它们解析丢弃。**`v0.0.3` 是破坏性版本**：`OrderResult` 删掉 `InternalIdentifier`（渠道单号自 2026-11-05 起不再下发），响应里的产品层从 `Product` 换成带 `Name` 的 `OrderProduct`（读 `.Product.Type` 的调用点不受影响）。
 
 TypeScript 版已发布到 npm（`@reroute.money/access-toolkit`，`latest` 起 `0.0.1`）：
 
@@ -140,7 +140,7 @@ Authorization: Signature usingKey=..&actAs=..&generationTime=..&requestSignature
 
 ## 关键语义
 
-- **四个单号别混**：**单据号** `uniqueIdentifier` 在响应顶层（代收是收款单号、代付是付款单号，各是 `collection_orders` / `payment_orders` 行自己的 uuid）——查单接口认它，商户要存的、订单推送带的都是它；`order.externalIdentifier` 是**商户自己的单号**（下单带进来，成员级唯一）；`order.uniqueIdentifier` 是**订单号**（`orders` 行自己的 uuid，平台下发给渠道当 `externalId` 用的就是它，**查单接口不认它**，拿它去查必然查空）；`order.internalIdentifier` 是**渠道单号**（平台拿到渠道结论才落得上，下单被渠道明确拒绝时为空，落定后不再变化，可用它去渠道侧核对这笔交易）。
+- **三个单号别混**：**单据号** `uniqueIdentifier` 在响应顶层（代收是收款单号、代付是付款单号，各是 `collection_orders` / `payment_orders` 行自己的 uuid）——查单接口认它，商户要存的、订单推送带的都是它；`order.externalIdentifier` 是**商户自己的单号**（下单带进来，成员级唯一）；`order.uniqueIdentifier` 是**订单号**（`orders` 行自己的 uuid，平台下发给渠道当 `externalId` 用的就是它，**查单接口不认它**，拿它去查必然查空）。渠道给出的单号（`internalIdentifier`）**自 2026-11-05 起不再下发**，响应与推送里都读不到；要与渠道侧对账，按渠道自己的账单或找运营取号。
 - **两个地址别混**：`redirectURL` 是**去**渠道收银台的跳转地址（渠道给的，商户据此把付款人导过去；渠道没给则一直为空）；`returnURL` 是**回**商户的跳转地址（商户下单时登记，平台原样下发渠道，付款人付完后由渠道导回这里）。平台不校验 `returnURL` 归属哪个域名，也不把它拼到 `redirectURL` 上。
 - **币种**：全量开量，ISO 4217 三字码加链上出款用的 USDT 共 167 个，与后端 `Currency` 枚举同一张表（dinero.js 的 `currencies`）。TypeScript 版运行期直接引这张表，导出 `CURRENCIES` 与 `getCurrencyPrecision`（INR 2、VND 0、KWD 3、USDT 6）；Go 版没有标准库币种表，这个包又承诺零第三方依赖，所以同一张表以常量形式落在 `golang/currency.go`（手维护，与 TS 侧同源同序）。能不能换算成交另看该币种有没有配汇率与渠道。
 - **金额**：两侧币种必传，至少一侧金额完整，缺失侧由服务端按命中汇率补齐（找不到汇率直接报错）。`value` 一律为最小币种单位，小数位由币种本身决定（多数为分，VND/JPY 等无小数位，USDT 为 10^-6）。

@@ -43,7 +43,7 @@ const response = await client.makePaymentOrder({
   receiptInformation: { type: 'UPI', identifier: 'payee@okhdfcbank' },
 });
 
-console.log(response.data.order.status, response.data.order.internalIdentifier);
+console.log(response.data.uniqueIdentifier, response.data.order.status); // 单据号在顶层, 查单与对账认它
 ```
 
 `platformPublicKey` 目前在 TS 版只登记不消费（没有回调验签入口，Go 版有）；`_httpClient` 是逃生入口，除 `baseURL` 外的 axios 配置同样生效。

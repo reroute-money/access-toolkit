@@ -19,7 +19,7 @@ import (
 // testNotifyBody 平台推送的业务单据报文片段 | 形状取自 OrderCallbackService.buildMerchantNotifyBody
 // 的实际序列化结果（代收推 collection_orders 那一行, 订单包在 order 里, 不带 {code,data} 信封,
 // fees/feeGroups 已被剔除, channel 只剩 name）
-const testNotifyBody = `{"identifier":7,"uniqueIdentifier":"6f0f6c1a-2c94-4c1c-9c2f-2a1d3e4b5c6d","redirectURL":"https://checkout.example.com/pay/6f0f6c1a","returnURL":"https://shop.example.com/orders/DJP240101ABCDEFGH/paid","order":{"identifier":1201,"uniqueIdentifier":"9a8b7c6d-5e4f-4a1b-8c9d-0e1f2a3b4c5d","externalIdentifier":"DJP240101ABCDEFGH","internalIdentifier":"CH-2026-0001","status":"SUCCEEDED","cancelAt":"2026-11-16T00:00:00.000Z","type":"COLLECTION","amount":{"currency":"INR","value":100000},"paymentAmount":{"currency":"INR","value":100000},"receiptAmount":{"currency":"USDT","value":11700000},"product":{"type":"ONLINE_RECEIVE"},"callbackURL":"https://shop.example.com/api/v1/payments/webhook/reroute","callbackStatus":"SUCCEEDED","channel":{"name":"Reroute Money"},"createdAt":"2026-10-09T00:00:00.000Z","updatedAt":"2026-10-09T00:01:00.000Z"}}`
+const testNotifyBody = `{"uniqueIdentifier":"6f0f6c1a-2c94-4c1c-9c2f-2a1d3e4b5c6d","redirectURL":"https://checkout.example.com/pay/6f0f6c1a","returnURL":"https://shop.example.com/orders/DJP240101ABCDEFGH/paid","order":{"uniqueIdentifier":"9a8b7c6d-5e4f-4a1b-8c9d-0e1f2a3b4c5d","externalIdentifier":"DJP240101ABCDEFGH","status":"SUCCEEDED","cancelAt":"2026-11-16T00:00:00.000Z","type":"COLLECTION","amount":{"currency":"INR","value":100000},"paymentAmount":{"currency":"INR","value":100000},"receiptAmount":{"currency":"USDT","value":11700000},"product":{"type":"ONLINE_RECEIVE","name":"线上代收"},"callbackURL":"https://shop.example.com/api/v1/payments/webhook/reroute","callbackStatus":"SUCCEEDED","channel":{"name":"Reroute Money"},"createdAt":"2026-10-09T00:00:00.000Z","updatedAt":"2026-10-09T00:01:00.000Z"}}`
 
 const (
 	testNotifyPath           = "/api/v1/payments/webhook/reroute"
@@ -273,8 +273,9 @@ func TestParseMerchantNotify(t *testing.T) {
 	if notify.Order.ExternalIdentifier != "DJP240101ABCDEFGH" {
 		t.Errorf("order.externalIdentifier = %q", notify.Order.ExternalIdentifier)
 	}
-	if notify.Order.InternalIdentifier != "CH-2026-0001" {
-		t.Errorf("order.internalIdentifier = %q", notify.Order.InternalIdentifier)
+	// 产品层带 type 与展示名 name; 渠道单号 internalIdentifier 自 2026-11-05 起不再下发
+	if notify.Order.Product == nil || notify.Order.Product.Type != "ONLINE_RECEIVE" || notify.Order.Product.Name != "线上代收" {
+		t.Errorf("order.product = %+v", notify.Order.Product)
 	}
 	if notify.Order.Status != OrderStatusSucceeded {
 		t.Errorf("order.status = %q", notify.Order.Status)

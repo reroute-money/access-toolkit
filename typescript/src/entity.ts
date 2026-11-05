@@ -91,16 +91,12 @@ export type Money = {
  *
  * `uniqueIdentifier` 是 `orders` 行自己的 uuid：平台下发给渠道当 `externalId` 用的就是它,
  * 订单推送里也带着它, 但**查单接口不认它** —— 商户要存的是单据层的
- * `CollectionOrderResult.uniqueIdentifier` / `PaymentOrderResult.uniqueIdentifier`
+ * `CollectionOrderResult.uniqueIdentifier` / `PaymentOrderResult.uniqueIdentifier`。
+ * 渠道单号（`internalIdentifier`）2026-11-05 起不再下发, 对账改走渠道侧账单或找运营
  */
 export type OrderResult = {
   uniqueIdentifier: string;
   externalIdentifier: string;
-  /**
-   * 渠道单号 | 下游渠道给出的订单编号, 服务端拿到渠道结论时落库, 落定后不再变化;
-   * 下单被渠道明确拒绝或渠道没给号时为空
-   */
-  internalIdentifier?: string;
   type: OrderType;
   status: OrderStatus;
   /** 自动撤销时刻 | 到点仍未落定的单由平台撤成 `CANCELED`; 下单时定好, 改派渠道不重置 */
@@ -108,7 +104,8 @@ export type OrderResult = {
   paymentAmount: Money;
   receiptAmount: Money;
   feeAmount?: Money;
-  product?: { type: string };
+  /** 产品 | `type` 是形态（如 `ONLINE_PAY`）, `name` 是展示名 */
+  product?: { type: string; name?: string };
   callbackURL?: string;
   /** 订单推送投递状态 | 首推报文里带的是建单初值 `PENDING`, 投递结论落库后由后续推送或查单给出 */
   callbackStatus?: OrderCallbackStatus;
