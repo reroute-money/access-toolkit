@@ -11,14 +11,14 @@ Reroute Money 接入点 REST `/v2/*` 的官方客户端 | 同一套签名鉴权�
 
 ## 安装
 
-Go 版直接可 `go get`（本仓库 public，module path 指向 `golang/` 子目录，最新标签 `golang/v0.0.3`）：
+Go 版直接可 `go get`（本仓库 public，module path 指向 `golang/` 子目录，最新标签 `golang/v0.0.4`）：
 
 ```bash
 go get github.com/reroute-money/access-toolkit/golang          # 取最新标签
-go get github.com/reroute-money/access-toolkit/golang@v0.0.3   # 钉版本
+go get github.com/reroute-money/access-toolkit/golang@v0.0.4   # 钉版本
 ```
 
-`v0.0.2`（2026-11-05）起 `OrderResult` 才带 `CancelAt`（到点自动撤销的时刻）与 `CallbackStatus`（订单推送的投递进度），`OrderStatus` 也才声明 `CANCELED`——`v0.0.1` 里这三个都没有，旧版会把它们解析丢弃。**`v0.0.3` 是破坏性版本**：`OrderResult` 删掉 `InternalIdentifier`（渠道单号自 2026-11-05 起不再下发），响应里的产品层从 `Product` 换成带 `Name` 的 `OrderProduct`（读 `.Product.Type` 的调用点不受影响）。
+`v0.0.2`（2026-11-05）起 `OrderResult` 才带 `CancelAt`（到点自动撤销的时刻）与 `CallbackStatus`（订单推送的投递进度），`OrderStatus` 也才声明 `CANCELED`——`v0.0.1` 里这三个都没有，旧版会把它们解析丢弃。**`v0.0.3` 是破坏性版本**：`OrderResult` 删掉 `InternalIdentifier`（渠道单号自 2026-11-05 起不再下发），响应里的产品层从 `Product` 换成带 `Name` 的 `OrderProduct`（读 `.Product.Type` 的调用点不受影响）。`v0.0.4`（2026-11-17）非破坏：`OrderRequest` 新增当事人信息两键 `payer` / `payee`（同形态、字段全可选：`ipAddress` / `realName` / `phoneNumber`（带区号）/ `emailAddress` / `bank{ name, cardNumber }`），渠道适配器优先用商户带进来的值、缺项才按订单号造占位；响应与订单推送不回显这两列，也不参与幂等比较。npm 侧 `0.0.3` 没有单独发过，`0.0.2` 之后直接发 `0.0.4`，装到 `latest` 的商户会一次吃到上面两段口径。
 
 TypeScript 版已发布到 npm（`@reroute.money/access-toolkit`，`latest` 起 `0.0.1`）：
 

@@ -75,6 +75,30 @@ func NewBlockchainReceipt(chain Chain, address string) ReceiptInformation {
 	return ReceiptInformation{Type: ReceiptTypeBLOCKCHAIN, Chain: chain, Address: address}
 }
 
+// OrderPartyInformationBank 当事人银行信息 | 渠道侧要的开户行与卡号（YourPay 代收 bank_name / bank_card_number）
+type OrderPartyInformationBank struct {
+	// Name 开户行名称 | 可选
+	Name string `json:"name,omitempty"`
+	// CardNumber 银行卡号 | 可选
+	CardNumber string `json:"cardNumber,omitempty"`
+}
+
+// OrderPartyInformation 单据当事人信息 | OrderRequest.Payer / OrderRequest.Payee 两键共用的自定义身份信息, 全部可选。
+// 渠道适配器优先用商户带进来的值, 缺项才按订单号造占位值; 响应与订单推送不回显这两列, 也不参与幂等比较。
+// 字段全可选、没有不合法组合, 照 Product 的惯例不提供构造函数, 直接字面量构造。
+type OrderPartyInformation struct {
+	// IPAddress 当事人终端 IP | 可选
+	IPAddress string `json:"ipAddress,omitempty"`
+	// RealName 实名姓名 | 可选
+	RealName string `json:"realName,omitempty"`
+	// PhoneNumber 手机号 | 带区号, 如 +66812345678; 可选
+	PhoneNumber string `json:"phoneNumber,omitempty"`
+	// EmailAddress 电子邮箱 | 可选
+	EmailAddress string `json:"emailAddress,omitempty"`
+	// Bank 银行卡信息 | 可选
+	Bank *OrderPartyInformationBank `json:"bank,omitempty"`
+}
+
 // Product 产品 | 下单只给类型, 具体产品由服务端按 (单据种类, 付款币种, 收款币种) 定位
 type Product struct {
 	// Type 产品类型 | 如 ONLINE_PAY / ONLINE_RECEIVE
@@ -103,6 +127,10 @@ type OrderRequest struct {
 	Product Product `json:"product"`
 	// CallbackURL 回调地址 | 可空
 	CallbackURL string `json:"callbackURL,omitempty"`
+	// Payer 付款方 | 自定义身份信息, 全部可选; 渠道适配器优先用这里的值（YourPay 代收四键）, 响应与推送不回显, 不参与幂等比较
+	Payer *OrderPartyInformation `json:"payer,omitempty"`
+	// Payee 收款方 | 与 Payer 同形态; 代付收款账户的资金口径仍在 ReceiptInformation
+	Payee *OrderPartyInformation `json:"payee,omitempty"`
 }
 
 // PaymentOrder 代付下单入参 | 收款信息必传（钱打给谁不能含糊, 且参与幂等比较）
@@ -268,7 +296,8 @@ type Account struct {
 // 单据种类看 Order.Type, 别拿 Order.UniqueIdentifier 去查单——那是另一张表的号, 查单接口不认。
 //
 // 只声明商户要消费的字段, 其余（tenantMember、汇率等）解析时忽略; 平台侧已剔除 fees / feeGroups,
-// 并把 channel 裁成只剩 name。报文不带 {code,data} 信封。
+// 并把 channel 裁成只剩 name——人工通路拦下的那种单没有渠道, 报文里连 channel 这个键都没有。
+// 报文不带 {code,data} 信封。
 type MerchantNotify struct {
 	// UniqueIdentifier 单据号 | 代收是收款单号、代付是付款单号, 与查单接口认的是同一个号
 	UniqueIdentifier string `json:"uniqueIdentifier"`

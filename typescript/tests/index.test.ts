@@ -220,6 +220,106 @@ uwIDAQAB
     ).rejects.toThrow(RerouteMoneyException);
   });
 
+  test('makeCollectionOrderWithPayer', async () => {
+    // 假网关 | 在 axios adapter 层截下签名后的出站字节, 不依赖本地接入点
+    let outgoingBody: string | undefined;
+    const httpClient = client.getHTTPClient();
+    const originalAdapter = httpClient.defaults.adapter;
+    httpClient.defaults.adapter = async (config) => {
+      outgoingBody = config.data as string;
+      return {
+        data: {
+          code: 'OK',
+          data: {
+            uniqueIdentifier: 'co-payer-1',
+            order: { uniqueIdentifier: 'o-3', status: 'CREATED' },
+          },
+        },
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config,
+      };
+    };
+    try {
+      // 带 payer 建单 | 全键给齐, 出站 JSON 逐字带出
+      const payer = {
+        ipAddress: '203.0.113.7',
+        realName: 'SOMCHAI RAT',
+        phoneNumber: '+66812345678',
+        emailAddress: 'somchai@example.com',
+        bank: { name: 'Kasikornbank', cardNumber: '4111111111111111' },
+      };
+      const result = await client.makeCollectionOrder({
+        order: {
+          paymentAmount: {
+            currency: 'INR',
+            value: 100,
+          },
+          receiptAmount: {
+            currency: 'INR',
+          },
+          externalIdentifier: 'co-payer-1',
+          product: {
+            type: 'ONLINE_RECEIVE',
+          },
+          payer,
+        },
+      });
+      // -
+      expect(result.data.order.uniqueIdentifier).toBe('o-3');
+      expect(JSON.parse(outgoingBody!).order.payer).toEqual(payer);
+    } finally {
+      httpClient.defaults.adapter = originalAdapter;
+    }
+  });
+
+  test('makeCollectionOrderWithoutPayer', async () => {
+    // 假网关 | 同上, 截出站字节检查键的有无
+    let outgoingBody: string | undefined;
+    const httpClient = client.getHTTPClient();
+    const originalAdapter = httpClient.defaults.adapter;
+    httpClient.defaults.adapter = async (config) => {
+      outgoingBody = config.data as string;
+      return {
+        data: {
+          code: 'OK',
+          data: {
+            uniqueIdentifier: 'co-plain-1',
+            order: { uniqueIdentifier: 'o-4', status: 'CREATED' },
+          },
+        },
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config,
+      };
+    };
+    try {
+      // 不带 payer 建单 | 出站 JSON 无该键（payee 同理）
+      await client.makeCollectionOrder({
+        order: {
+          paymentAmount: {
+            currency: 'INR',
+            value: 100,
+          },
+          receiptAmount: {
+            currency: 'INR',
+          },
+          externalIdentifier: 'co-plain-1',
+          product: {
+            type: 'ONLINE_RECEIVE',
+          },
+        },
+      });
+      // -
+      expect(JSON.parse(outgoingBody!).order).not.toHaveProperty('payer');
+      expect(JSON.parse(outgoingBody!).order).not.toHaveProperty('payee');
+    } finally {
+      httpClient.defaults.adapter = originalAdapter;
+    }
+  });
+
   test('queryPaymentOrder', async () => {
     // 先落一张单, 再按平台单号查回
     const made = await client.makePaymentOrder({

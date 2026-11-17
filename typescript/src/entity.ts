@@ -18,6 +18,32 @@ export type ReceiptInformation =
     }
   | { type: 'BLOCKCHAIN'; chain: 'TRON' | 'ETHEREUM'; address: string };
 
+/** 当事人银行信息 | 渠道侧要的开户行与卡号（YourPay 代收 bank_name / bank_card_number） */
+export type OrderPartyInformationBank = {
+  /** 开户行名称 */
+  name?: string;
+  /** 银行卡号 */
+  cardNumber?: string;
+};
+
+/**
+ * 单据当事人信息 | `order.payer` / `order.payee` 两键共用的自定义身份信息, 全部可选。
+ * 渠道适配器优先用商户带进来的值, 缺项才按订单号造占位值;
+ * 响应与订单推送不回显这两列, 也不参与幂等比较
+ */
+export type OrderPartyInformation = {
+  /** 当事人终端 IP */
+  ipAddress?: string;
+  /** 实名姓名 */
+  realName?: string;
+  /** 手机号（带区号, 如 +66812345678） */
+  phoneNumber?: string;
+  /** 电子邮箱 */
+  emailAddress?: string;
+  /** 银行卡信息 */
+  bank?: OrderPartyInformationBank;
+};
+
 /** 代付下单入参 | 付款/收款两侧币种必传, 金额至少一侧完整；收款信息必传（钱打给谁不能含糊, 且参与幂等比较） */
 export type PaymentOrder = {
   order: {
@@ -27,6 +53,10 @@ export type PaymentOrder = {
     externalIdentifier: string;
     product: { type: string };
     callbackURL?: string;
+    /** 付款方 | 自定义身份信息, 全部可选; 响应与推送不回显, 不参与幂等比较 */
+    payer?: OrderPartyInformation;
+    /** 收款方 | 与 payer 同形态; 代付收款账户的资金口径仍在 receiptInformation */
+    payee?: OrderPartyInformation;
   };
   receiptInformation: ReceiptInformation;
 };
@@ -40,6 +70,10 @@ export type CollectionOrder = {
     externalIdentifier: string;
     product: { type: string };
     callbackURL?: string;
+    /** 付款方 | 自定义身份信息, 全部可选; 渠道适配器优先用这里的值（YourPay 代收四键）, 响应与推送不回显, 不参与幂等比较 */
+    payer?: OrderPartyInformation;
+    /** 收款方 | 与 payer 同形态的自定义身份信息 */
+    payee?: OrderPartyInformation;
   };
   /**
    * 商户回跳地址 | 付款人完成支付后应回去的页面, 可空;

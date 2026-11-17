@@ -173,6 +173,10 @@ func TestMakeCollectionOrder(t *testing.T) {
 		if strings.Contains(string(rawBody), "receiptInformation") {
 			t.Errorf("请求体不应含 receiptInformation: %s", rawBody)
 		}
+		// 不带当事人信息时 payer / payee 两键整个省略（omitempty 指针）
+		if strings.Contains(string(rawBody), `"payer"`) || strings.Contains(string(rawBody), `"payee"`) {
+			t.Errorf("请求体不应含 payer/payee: %s", rawBody)
+		}
 		// 付款侧缺金额、收款侧完整 | value 段只出现在给定的那一侧
 		if want := `{"order":{"paymentAmount":{"currency":"INR"},"receiptAmount":{"currency":"INR","value":200},"externalIdentifier":"co-1","product":{"type":"ONLINE_RECEIVE"}}}`; string(rawBody) != want {
 			t.Errorf("请求体不一致:\n got  %s\n want %s", rawBody, want)
@@ -194,6 +198,50 @@ func TestMakeCollectionOrder(t *testing.T) {
 		t.Fatalf("下单失败: %v", err)
 	}
 	if response.Data.Order.UniqueIdentifier != "o-2" {
+		t.Errorf("order.uniqueIdentifier = %s", response.Data.Order.UniqueIdentifier)
+	}
+}
+
+func TestMakeCollectionOrderWithPayer(t *testing.T) {
+	client := serveWith(t, func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/v2/collection-order" {
+			t.Errorf("path = %s", request.URL.Path)
+		}
+		rawBody, err := io.ReadAll(request.Body)
+		if err != nil {
+			t.Errorf("读请求体失败: %v", err)
+		}
+		// 带 payer 建单 | 出站 JSON 含 payer 逐字值, payee 只给实名时其余嵌套键省略
+		if want := `{"order":{"paymentAmount":{"currency":"INR","value":100},"receiptAmount":{"currency":"INR"},"externalIdentifier":"co-payer-1","product":{"type":"ONLINE_RECEIVE"},"payer":{"ipAddress":"203.0.113.7","realName":"SOMCHAI RAT","phoneNumber":"+66812345678","emailAddress":"somchai@example.com","bank":{"name":"Kasikornbank","cardNumber":"4111111111111111"}},"payee":{"realName":"SOMCHAI RAT"}}}`; string(rawBody) != want {
+			t.Errorf("请求体不一致:\n got  %s\n want %s", rawBody, want)
+		}
+		verifyLikeBackend(t, request, rawBody)
+		_, _ = writer.Write([]byte(`{"code":"OK","data":{"uniqueIdentifier":"co-payer-1","order":{"uniqueIdentifier":"o-3","status":"CREATED"}}}`))
+	})
+
+	response, err := client.MakeCollectionOrder(context.Background(), CollectionOrder{
+		Order: OrderRequest{
+			PaymentAmount:      Amount{Currency: CurrencyINR, Value: ptr(int64(100))},
+			ReceiptAmount:      Amount{Currency: CurrencyINR},
+			ExternalIdentifier: "co-payer-1",
+			Product:            Product{Type: "ONLINE_RECEIVE"},
+			Payer: &OrderPartyInformation{
+				IPAddress:    "203.0.113.7",
+				RealName:     "SOMCHAI RAT",
+				PhoneNumber:  "+66812345678",
+				EmailAddress: "somchai@example.com",
+				Bank: &OrderPartyInformationBank{
+					Name:       "Kasikornbank",
+					CardNumber: "4111111111111111",
+				},
+			},
+			Payee: &OrderPartyInformation{RealName: "SOMCHAI RAT"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("下单失败: %v", err)
+	}
+	if response.Data.Order.UniqueIdentifier != "o-3" {
 		t.Errorf("order.uniqueIdentifier = %s", response.Data.Order.UniqueIdentifier)
 	}
 }
